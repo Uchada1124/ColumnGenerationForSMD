@@ -1,8 +1,8 @@
 import numpy as np
 from mip import Model, xsum, maximize, BINARY
 
-import graph_util
-import partition_util
+import utils.graph_util as graph_util
+import utils.partition_util as partition_util
 
 def calc_w_c(C, lamda, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative):
     C = np.array(C)
@@ -49,7 +49,6 @@ def solve_lp_s(partitions, lamda, adj_matrix_positive, adj_matrix_negative, degr
 
     return objective_value, solution, all_communities
 
-
 def main():
     # Parameters for graph generation
     num_nodes = 10
@@ -75,11 +74,10 @@ def main():
     print("Objective Value:", objective_value)
     result_partition = []
     for i, z in enumerate(solution):
-        if z > 0.5:  # Selected communities
+        if z > 0.5: 
             print(f"z_{i} (for community {all_communities[i]}): {z}")
             result_partition.append(all_communities[i])
     graph_util.plot_partitioned_graph(graph, result_partition)
-
 
 if __name__ == '__main__':
     main()

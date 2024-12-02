@@ -21,19 +21,13 @@ def generate_signed_graph(num_nodes, edge_prob=0.3):
     return list(G.nodes()), adjacency_matrix_positive, adjacency_matrix_negative, degree_matrix_positive, degree_matrix_negative, G
 
 def plot_signed_graph(G):
-    """
-    Visualize a signed graph with colors indicating edge signs.
-    
-    Args:
-        G (networkx.Graph): The graph to visualize.
-    """
     pos = nx.spring_layout(G)
 
     positive_edges = [(u, v) for u, v, d in G.edges(data=True) if d['sign'] == 1]
     negative_edges = [(u, v) for u, v, d in G.edges(data=True) if d['sign'] == -1]
     
     nx.draw_networkx_nodes(G, pos, node_size=500, node_color="lightblue")
-    
+
     nx.draw_networkx_edges(G, pos, edgelist=positive_edges, edge_color="red", label="Positive Edges")
     
     nx.draw_networkx_edges(G, pos, edgelist=negative_edges, edge_color="blue", style="dashed", label="Negative Edges")
