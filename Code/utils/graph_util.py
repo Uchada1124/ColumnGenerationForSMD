@@ -20,6 +20,19 @@ def generate_signed_graph(num_nodes, edge_prob=0.3):
     
     return list(G.nodes()), adjacency_matrix_positive, adjacency_matrix_negative, degree_matrix_positive, degree_matrix_negative, G
 
+def generate_edges(adj_matrix_positive, adj_matrix_negative):
+    """
+    正負の隣接行列からエッジのリストを生成
+    """
+    num_vertices = adj_matrix_positive.shape[0]
+    edges = [
+        (u, v)
+        for u in range(num_vertices)
+        for v in range(u + 1, num_vertices)
+        if adj_matrix_positive[u, v] > 0 or adj_matrix_negative[u, v] > 0
+    ]
+    return edges
+
 def plot_signed_graph(G):
     pos = nx.spring_layout(G)
 
@@ -67,6 +80,9 @@ def main():
     print("Negative Adjacency Matrix (A-):\n", adj_matrix_negative)
     print("Positive Degree Matrix (D+):\n", degree_matrix_positive)
     print("Negative Degree Matrix (D-):\n", degree_matrix_negative)
+
+    edges = generate_edges(adj_matrix_positive, adj_matrix_negative)
+    print("Edges:\n", edges)
     
     plot_signed_graph(graph)
 

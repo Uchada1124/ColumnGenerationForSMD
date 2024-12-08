@@ -5,8 +5,12 @@ import utils.graph_util as graph_util
 import utils.partition_util as partition_util
 
 def calc_w_c(C, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative):
+    """
+    各クラスター C に対して重み w_C を計算する関数
+    """
     C = np.array(C)
     
+    # クラスター内の正負の隣接行列と次数行列を取得
     A_plus_C = adj_matrix_positive[np.ix_(C, C)]
     A_minus_C = adj_matrix_negative[np.ix_(C, C)]
     D_plus_C = degree_matrix_positive[C, C]
@@ -14,6 +18,7 @@ def calc_w_c(C, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_mat
 
     size_C = len(C)
 
+    # 重み w_C を計算
     w_C = (
         (2 * np.sum(A_plus_C)) / size_C
         - (2 * (1 - lambda_val) * np.sum(D_plus_C)) / size_C
@@ -24,8 +29,12 @@ def calc_w_c(C, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_mat
     return w_C
 
 def solve_lp_s(partitions, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative):
+    """
+    制約付き線形計画問題 LP(S) を解く関数
+    """
     model = Model(sense=maximize, solver_name="CBC")
 
+    # 全てのコミュニティとそれに対応する重みを計算
     all_communities = []
     w_c_values = []
     for partition in partitions:
@@ -34,24 +43,33 @@ def solve_lp_s(partitions, lambda_val, adj_matrix_positive, adj_matrix_negative,
             w_c_values.append(w_c)
             all_communities.append(C)
 
+    # z 変数を作成（バイナリ変数）
     z_vars = [model.add_var(name=f"z_{i}", var_type=BINARY) for i in range(len(all_communities))]
 
+    # 目的関数を定義
     model.objective = xsum(w_c_values[i] * z_vars[i] for i in range(len(all_communities)))
 
+    # 制約を追加（各頂点がちょうど1つのクラスターに属するようにする）
     num_vertices = adj_matrix_positive.shape[0]
     for u in range(num_vertices):
         model += xsum(z_vars[i] for i, C in enumerate(all_communities) if u in C) == 1
 
+    # 最適化を実行
     model.optimize()
 
+    # 解を取得
     solution = [z_var.x for z_var in z_vars]
     objective_value = model.objective_value
 
     return objective_value, solution, all_communities
 
 def solve_ld_s(partitions, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative):
+    """
+    双対問題 LD(S) を解く関数
+    """
     model = Model(sense=minimize, solver_name="CBC")
 
+    # 全てのコミュニティとその重みを計算
     all_communities = []
     w_c_values = []
     for partition in partitions:
@@ -60,33 +78,31 @@ def solve_ld_s(partitions, lambda_val, adj_matrix_positive, adj_matrix_negative,
             w_c_values.append(w_c)
             all_communities.append(C)
 
+    # 双対変数 y を作成
     num_vertices = adj_matrix_positive.shape[0]
     y_vars = [model.add_var(name=f"y_{u}") for u in range(num_vertices)]
 
+    # 目的関数を定義
     model.objective = xsum(y_vars[u] for u in range(num_vertices))
 
+    # 制約を追加（双対条件を満たすようにする）
     for i, C in enumerate(all_communities):
         model += xsum(y_vars[u] for u in C) >= w_c_values[i]
 
+    # 最適化を実行
     model.optimize()
 
+    # 解を取得
     solution = [y_var.x for y_var in y_vars]
     objective_value = model.objective_value
 
     return objective_value, solution
 
-def generate_edges(adj_matrix_positive, adj_matrix_negative):
-    num_vertices = adj_matrix_positive.shape[0]
-    edges = [
-        (u, v)
-        for u in range(num_vertices)
-        for v in range(u + 1, num_vertices)
-        if adj_matrix_positive[u, v] > 0 or adj_matrix_negative[u, v] > 0
-    ]
-    return edges
-
-def solve_ap_qp_milp(vertices, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative, lambda_val):
-    edges = generate_edges(adj_matrix_positive, adj_matrix_negative)
+def solve_ap_qp_milp(vertices, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative, lambda_val, solution_ld):
+    """
+    AP-QP の整数線形計画を解く関数
+    """
+    edges = graph_util.generate_edges(adj_matrix_positive, adj_matrix_negative)
     
     model = Model(sense=maximize, solver_name="CBC")
 
@@ -96,16 +112,16 @@ def solve_ap_qp_milp(vertices, adj_matrix_positive, adj_matrix_negative, degree_
     w_vars = {(u, v): model.add_var(var_type=CONTINUOUS, lb=0, ub=1, name=f"w_{u}_{v}") for u, v in edges}
     s_var = model.add_var(var_type=CONTINUOUS, lb=0, ub=1, name="s")
 
-    # 目的関数の構築
+    # 目的関数を構築
     model.objective = (
-        4 * xsum(w_vars[u, v] for u, v in edges if adj_matrix_positive[u, v] > 0)  # 正のエッジの寄与
-        - 2 * (1 - lambda_val) * xsum(degree_matrix_positive[u, u] * alpha_vars[u] for u in vertices)  # 正の次数
-        - 4 * xsum(w_vars[u, v] for u, v in edges if adj_matrix_negative[u, v] > 0)  # 負のエッジの寄与
-        + 2 * lambda_val * xsum(degree_matrix_negative[u, u] * alpha_vars[u] for u in vertices)  # 負の次数
-        - xsum(alpha_vars[u] for u in vertices)  # alpha のコスト
+        4 * xsum(w_vars[u, v] for u, v in edges if adj_matrix_positive[u, v] > 0)
+        - 2 * (1 - lambda_val) * xsum(degree_matrix_positive[u, u] * alpha_vars[u] for u in vertices)
+        - 4 * xsum(w_vars[u, v] for u, v in edges if adj_matrix_negative[u, v] > 0)
+        + 2 * lambda_val * xsum(degree_matrix_negative[u, u] * alpha_vars[u] for u in vertices)
+        - xsum(solution_ld[u] * x_vars[u] for u in vertices)
     )
 
-    # 制約の追加
+    # 制約を追加
     for u in vertices:
         model += s_var - (1 - x_vars[u]) <= alpha_vars[u], f"alpha_lower_bound_{u}"
         model += alpha_vars[u] <= x_vars[u], f"alpha_upper_bound_{u}"
@@ -115,70 +131,107 @@ def solve_ap_qp_milp(vertices, adj_matrix_positive, adj_matrix_negative, degree_
     for u, v in edges:
         model += w_vars[u, v] <= alpha_vars[u], f"w_alpha_u_{u}_{v}"
         model += w_vars[u, v] <= alpha_vars[v], f"w_alpha_v_{u}_{v}"
-        model += alpha_vars[u] - (2 - x_vars[u] - x_vars[v]) <= w_vars[u, v], f"w_alpha_constraint_{u}_{v}"
+        model += alpha_vars[u] - (2 - x_vars[u] - x_vars[v]) <= w_vars[u, v], f"w_alpha_{u}_constraint_{u}_{v}"
+        model += alpha_vars[v] - (2 - x_vars[u] - x_vars[v]) <= w_vars[u, v], f"w_alpha_{v}_constraint_{u}_{v}"
 
-    # s の範囲制約
-    model += s_var >= 0, "s_lower_bound"
-    model += s_var <= 1, "s_upper_bound"
-
-    # 最適化
+    # 最適化を実行
     model.optimize()
 
-    # 解の取得
+    # 解を取得
     solution = {u: x_vars[u].x for u in vertices}
     objective_value = model.objective_value
 
     return objective_value, solution, s_var.x
 
+def column_generation(vertices, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative, lambda_val, initial_partitions):
+    """
+    列生成法
+    """
+    # Step 1: 初期の列集合 S を設定する. 
+    S = initial_partitions
+
+    while True:
+        # Step 2: 線形計画問題 LP(S), LD(S) を解く. LD(S)の解き方を相談する. 
+        objective_value_lp, solution_lp, all_communities = solve_lp_s(
+            partitions=S,
+            adj_matrix_positive=adj_matrix_positive,
+            adj_matrix_negative=adj_matrix_negative,
+            degree_matrix_positive=degree_matrix_positive,
+            degree_matrix_negative=degree_matrix_negative,
+            lambda_val=lambda_val
+        )
+        print("LP(S) Objective Value:", objective_value_lp)
+    
+        objective_value_ld, solution_ld = solve_ld_s(
+            partitions=S,
+            adj_matrix_positive=adj_matrix_positive,
+            adj_matrix_negative=adj_matrix_negative,
+            degree_matrix_positive=degree_matrix_positive,
+            degree_matrix_negative=degree_matrix_negative,
+            lambda_val=lambda_val
+        )
+        print("LD(S) Objective Value:", objective_value_ld)
+
+        # Step 3: 補助問題 AP-QP を解く. 
+        objective_value_ap_qp, solution_ap_qp, _ = solve_ap_qp_milp(
+            vertices=vertices,
+            adj_matrix_positive=adj_matrix_positive,
+            adj_matrix_negative=adj_matrix_negative,
+            degree_matrix_positive=degree_matrix_positive,
+            degree_matrix_negative=degree_matrix_negative,
+            lambda_val=lambda_val,
+            solution_ld=solution_ld
+        )
+        print("AP-QP Objective Value:", objective_value_ap_qp)
+
+        # Step 4: 終了条件を確認する. 
+        if objective_value_ap_qp <= 0:
+            print("Column Generation terminated: no column with positive reduced cost.")
+            break
+
+        # Step 5: S を更新する. 
+        new_column = [u for u in vertices if solution_ap_qp[u] > 0.5]
+        print(f"New column added to S: {new_column}")
+        S.append([new_column])  # 新しいパーティションを追加する. 
+
+    return S, objective_value_lp, solution_lp, all_communities
 
 def main():
-    # Parameters for graph generation
+    # グラフ生成のパラメータを設定する. 
     num_nodes = 10
     edge_prob = 0.4
-    
-    # Generate the signed graph
+
+    # 符号付ネットワークを生成する. 
     (nodes, adj_matrix_positive, adj_matrix_negative,
      degree_matrix_positive, degree_matrix_negative, graph) = graph_util.generate_signed_graph(num_nodes, edge_prob)
 
-    # Generate multiple unique random partitions
+    # 初期の分割を生成する. 
     vertices = list(range(num_nodes))
     num_partitions = 3
     num_samples = 5
-    partitions = partition_util.generate_unique_partitions(vertices, num_partitions, num_samples)
+    initial_partitions = partition_util.generate_unique_partitions(vertices, num_partitions, num_samples)
 
-    # Solve LP(S)
+    # ハイパーパラメータを設定する. 
     lambda_val = 0.5
-    objective_value_lp, solution_lp, all_communities = solve_lp_s(
-        partitions, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative
-    )
-    print("LP(S) Objective Value:", objective_value_lp)
-    print("Dual Variables (y):", solution_lp)
 
-    # Solve LD(S)
-    objective_value_ld, solution_ld = solve_ld_s(
-        partitions, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative
-    )
-    print("LD(S) Objective Value:", objective_value_ld)
-    print("Dual Variables (y):", solution_ld)
-    
-    # Solve AP-QP MILP
-    objective_value, solution, s_value = solve_ap_qp_milp(
-        vertices=nodes,
+    # 列生成法を実行する. 
+    final_partitions, final_objective_value, final_solution, all_communities = column_generation(
+        vertices=vertices,
         adj_matrix_positive=adj_matrix_positive,
         adj_matrix_negative=adj_matrix_negative,
         degree_matrix_positive=degree_matrix_positive,
         degree_matrix_negative=degree_matrix_negative,
-        lambda_val=lambda_val
+        lambda_val=lambda_val,
+        initial_partitions=initial_partitions
     )
 
-    print("Objective Value:", objective_value)
-    print("Solution for x:", solution)
-    print("Value of s:", s_value)
-    
-    # Print and plot results
-    print("Objective Value:", objective_value_lp)
+    # 結果を出力する. 
+    print("Final Partitions:", final_partitions)
+    print("Final Objective Value:", final_objective_value)
+    print("Final Solution:", final_solution)
+    print("All Communities", all_communities)
     result_partition = []
-    for i, z in enumerate(solution_lp):
+    for i, z in enumerate(final_solution):
         if z > 0.5: 
             print(f"z_{i} (for community {all_communities[i]}): {z}")
             result_partition.append(all_communities[i])
