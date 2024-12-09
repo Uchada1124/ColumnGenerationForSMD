@@ -4,6 +4,7 @@ import utils.column_generation_util as cg_util
 
 def main():
     # グラフ生成のパラメータを設定する. 
+    # 確立ブロックモデルmemo
     num_nodes = 10
     edge_prob = 0.4
 
