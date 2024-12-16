@@ -27,6 +27,9 @@ def generate_unique_partitions(vertices, num_partitions, num_samples):
     
     return unique_partitions
 
+def generate_singleton(vertices):
+    return [[v] for v in vertices]
+
 if __name__ == "__main__":
     vertices = list(range(10))
     num_partitions = 2
@@ -34,3 +37,6 @@ if __name__ == "__main__":
     partition = generate_random_partition(vertices, num_partitions)
     print("Vertices:", vertices)
     print("Generated Partition:", partition)
+
+    singleton = generate_singleton(vertices)
+    print("Singleton Partiton:", singleton)

@@ -4,19 +4,21 @@ import utils.column_generation_util as cg_util
 
 def main():
     # グラフ生成のパラメータを設定する. 
-    # 確立ブロックモデルmemo
-    num_nodes = 10
-    edge_prob = 0.4
-
+    num_nodes = 20
+    block_sizes = [5, 7, 8]
+    p_in = 0.5
+    p_out = 0.5
+    
     # 符号付ネットワークを生成する. 
     (nodes, adj_matrix_positive, adj_matrix_negative,
-     degree_matrix_positive, degree_matrix_negative, graph) = graph_util.generate_signed_graph(num_nodes, edge_prob)
+     degree_matrix_positive, degree_matrix_negative, graph) = graph_util.generate_signed_graph(num_nodes, block_sizes, p_in, p_out)
 
     # 初期の分割集合を生成する. 
     vertices = list(range(num_nodes))
     num_partitions = 3
     num_samples = 5
     initial_partitions = partition_util.generate_unique_partitions(vertices, num_partitions, num_samples)
+    # initial_partitions = [partition_util.generate_singleton(vertices)]
 
     # ハイパーパラメータを設定する. 
     lambda_val = 0.5
