@@ -6,8 +6,8 @@ def main():
     # グラフ生成のパラメータを設定する. 
     num_nodes = 20
     block_sizes = [5, 7, 8]
-    p_in = 0.5
-    p_out = 0.5
+    p_in = 0.2
+    p_out = 0.2
     
     # 符号付ネットワークを生成する. 
     (nodes, adj_matrix_positive, adj_matrix_negative,
@@ -15,10 +15,10 @@ def main():
 
     # 初期の分割集合を生成する. 
     vertices = list(range(num_nodes))
-    num_partitions = 3
-    num_samples = 5
-    initial_partitions = partition_util.generate_unique_partitions(vertices, num_partitions, num_samples)
-    # initial_partitions = [partition_util.generate_singleton(vertices)]
+    # num_partitions = 3
+    # num_samples = 5
+    # initial_partitions = partition_util.generate_unique_partitions(vertices, num_partitions, num_samples)
+    initial_partitions = [partition_util.generate_singleton(vertices)]
 
     # ハイパーパラメータを設定する. 
     lambda_val = 0.5

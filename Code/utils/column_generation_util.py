@@ -1,5 +1,5 @@
 import numpy as np
-from mip import Model, xsum, maximize, minimize, BINARY, CONTINUOUS
+from mip import Model, xsum, maximize, minimize, BINARY, CONTINUOUS, INF
 
 import utils.graph_util as graph_util
 
@@ -32,6 +32,7 @@ def solve_lp_s(partitions, lambda_val, adj_matrix_positive, adj_matrix_negative,
     制約付き線形計画問題 LP(S) を解く関数
     """
     model = Model(sense=maximize, solver_name="CBC")
+    model.solver.set_verbose(False)
 
     # 全てのコミュニティとそれに対応する重みを計算
     all_communities = []
@@ -42,8 +43,8 @@ def solve_lp_s(partitions, lambda_val, adj_matrix_positive, adj_matrix_negative,
             w_c_values.append(w_c)
             all_communities.append(C)
 
-    # z 変数を作成（バイナリ変数）[0,1]memo
-    z_vars = [model.add_var(name=f"z_{i}", var_type=BINARY) for i in range(len(all_communities))]
+    # z 変数を作成 [0,1]閉区間
+    z_vars = [model.add_var(var_type=CONTINUOUS, lb=0, ub=1, name=f"z_{i}") for i in range(len(all_communities))]
 
     # 目的関数を定義
     model.objective = xsum(w_c_values[i] * z_vars[i] for i in range(len(all_communities)))
@@ -67,6 +68,7 @@ def solve_ld_s(partitions, lambda_val, adj_matrix_positive, adj_matrix_negative,
     双対問題 LD(S) を解く関数
     """
     model = Model(sense=minimize, solver_name="CBC")
+    model.solver.set_verbose(False)
 
     # 全てのコミュニティとその重みを計算
     all_communities = []
@@ -79,7 +81,7 @@ def solve_ld_s(partitions, lambda_val, adj_matrix_positive, adj_matrix_negative,
 
     # 双対変数 y を作成 defaultの確認memo -infにする
     num_vertices = adj_matrix_positive.shape[0]
-    y_vars = [model.add_var(name=f"y_{u}") for u in range(num_vertices)]
+    y_vars = [model.add_var(lb=-INF, ub=INF, name=f"y_{u}") for u in range(num_vertices)]
 
     # 目的関数を定義
     model.objective = xsum(y_vars[u] for u in range(num_vertices))
@@ -104,6 +106,7 @@ def solve_ap_qp_milp(vertices, adj_matrix_positive, adj_matrix_negative, degree_
     edges = graph_util.generate_edges(adj_matrix_positive, adj_matrix_negative)
     
     model = Model(sense=maximize, solver_name="CBC")
+    model.solver.set_verbose(False)
 
     # 変数の定義
     x_vars = {u: model.add_var(var_type=BINARY, name=f"x_{u}") for u in vertices}

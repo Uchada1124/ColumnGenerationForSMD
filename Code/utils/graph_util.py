@@ -77,8 +77,8 @@ def plot_partitioned_graph(G, partition):
 def main():
     num_nodes = 20
     block_sizes = [5, 7, 8]
-    p_in = 0.5
-    p_out = 0.5
+    p_in = 0.2
+    p_out = 0.2
 
     (nodes, adj_matrix_positive, adj_matrix_negative,
      degree_matrix_positive, degree_matrix_negative, graph) = generate_signed_graph(num_nodes, block_sizes, p_in, p_out)
