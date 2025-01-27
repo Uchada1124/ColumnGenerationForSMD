@@ -3,28 +3,52 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib import colormaps
 
-def generate_signed_graph(num_nodes, block_sizes, p_in, p_out):
+import numpy as np
+import networkx as nx
+
+# 内側にも負のエッジもはやす
+
+def generate_signed_graph(block_sizes, p_in=0.9, p_out=0.1):
     num_blocks = len(block_sizes)
-    sizes = np.array(block_sizes)
-    probs = np.zeros((num_blocks, num_blocks)) + p_out
-    np.fill_diagonal(probs, p_in)
+    block_offsets = np.cumsum([0] + block_sizes[:-1])
+    total_nodes = sum(block_sizes)
 
-    G = nx.stochastic_block_model(block_sizes, probs)
+    adjacency_matrix_positive = np.zeros((total_nodes, total_nodes))
+    adjacency_matrix_negative = np.zeros((total_nodes, total_nodes))
 
-    for u, v in G.edges():
-        G[u][v]['sign'] = np.random.choice([-1, 1])
+    for b in range(num_blocks):
+        start, end = block_offsets[b], block_offsets[b] + block_sizes[b]
+        for i in range(start, end):
+            for j in range(i + 1, end):
+                if np.random.rand() < p_in:
+                    adjacency_matrix_positive[i, j] = 1
+                    adjacency_matrix_positive[j, i] = 1
 
-    adjacency_matrix_positive = nx.to_numpy_array(G, weight='sign')
-    adjacency_matrix_positive[adjacency_matrix_positive < 0] = 0
+    for b1 in range(num_blocks):
+        for b2 in range(b1 + 1, num_blocks):
+            start1, end1 = block_offsets[b1], block_offsets[b1] + block_sizes[b1]
+            start2, end2 = block_offsets[b2], block_offsets[b2] + block_sizes[b2]
+            for i in range(start1, end1):
+                for j in range(start2, end2):
+                    if np.random.rand() < p_out:
+                        adjacency_matrix_negative[i, j] = 1
+                        adjacency_matrix_negative[j, i] = 1
 
-    adjacency_matrix_negative = nx.to_numpy_array(G, weight='sign')
-    adjacency_matrix_negative[adjacency_matrix_negative > 0] = 0
-    adjacency_matrix_negative = np.abs(adjacency_matrix_negative)
+    G = nx.Graph()
+    G.add_nodes_from(range(total_nodes))
+
+    for i in range(total_nodes):
+        for j in range(i + 1, total_nodes):
+            if adjacency_matrix_positive[i, j] > 0:
+                G.add_edge(i, j, sign=1)
+            elif adjacency_matrix_negative[i, j] > 0:
+                G.add_edge(i, j, sign=-1)
 
     degree_matrix_positive = np.diag(np.sum(adjacency_matrix_positive, axis=1))
     degree_matrix_negative = np.diag(np.sum(adjacency_matrix_negative, axis=1))
 
     return list(G.nodes()), adjacency_matrix_positive, adjacency_matrix_negative, degree_matrix_positive, degree_matrix_negative, G
+
 
 def generate_edges(adj_matrix_positive, adj_matrix_negative):
     num_vertices = adj_matrix_positive.shape[0]
@@ -73,15 +97,13 @@ def plot_partitioned_graph(G, partition):
     plt.title("Partitioned Graph Visualization")
     plt.show()
 
-
 def main():
-    num_nodes = 20
     block_sizes = [5, 7, 8]
-    p_in = 0.2
-    p_out = 0.2
+    p_in = 0.8
+    p_out = 0.1
 
     (nodes, adj_matrix_positive, adj_matrix_negative,
-     degree_matrix_positive, degree_matrix_negative, graph) = generate_signed_graph(num_nodes, block_sizes, p_in, p_out)
+     degree_matrix_positive, degree_matrix_negative, graph) = generate_signed_graph(block_sizes, p_in, p_out)
 
     print("Nodes:", nodes)
     print("Positive Adjacency Matrix (A+):\n", adj_matrix_positive)

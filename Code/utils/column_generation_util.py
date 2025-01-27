@@ -1,110 +1,100 @@
 import numpy as np
-from mip import Model, xsum, maximize, minimize, BINARY, CONTINUOUS, INF
+from mip import Model, xsum, maximize, BINARY, CONTINUOUS, Column
 
 import utils.graph_util as graph_util
+
 
 def calc_w_c(C, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative):
     """
     各クラスター C に対して重み w_C を計算する関数
     """
     C = np.array(C)
-    
-    # クラスター内の正負の隣接行列と次数行列を取得
     A_plus_C = adj_matrix_positive[np.ix_(C, C)]
     A_minus_C = adj_matrix_negative[np.ix_(C, C)]
     D_plus_C = degree_matrix_positive[C, C]
     D_minus_C = degree_matrix_negative[C, C]
-
     size_C = len(C)
 
-    # 重み w_C を計算
-    w_C = (
-        (2 * np.sum(A_plus_C)) / size_C
-        - (2 * (1 - lambda_val) * np.sum(D_plus_C)) / size_C
-        - (2 * np.sum(A_minus_C)) / size_C
-        + (2 * lambda_val * np.sum(D_minus_C)) / size_C
-    )
+    # 各項の計算
+    term1 = 2 * np.sum(A_plus_C)
+    term2 = -2 * (1 - lambda_val) * np.sum(D_plus_C)
+    term3 = 2 * np.sum(A_minus_C)
+    term4 = -2 * lambda_val * np.sum(D_minus_C)
+    w_C = (term1 + term2 - (term3 + term4)) / size_C
+
+    print(C, term1, term2, term3, term4, w_C)
 
     return w_C
 
-def solve_lp_s(partitions, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative):
+def calc_w_c_dict(partitions, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative):
     """
-    制約付き線形計画問題 LP(S) を解く関数
+    全てのパーティションに対して, Key : C, Value ; w_C とする辞書を計算する関数
+    """
+    w_c_dict = {}
+    for partition in partitions:
+        for C in partition:
+            w_c = calc_w_c(C, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative)
+            w_c_dict[tuple(C)] = w_c
+    return w_c_dict
+
+def create_lp_s(partitions, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative):
+    """
+    LP(S) モデルを構築する関数
     """
     model = Model(sense=maximize, solver_name="CBC")
-    model.solver.set_verbose(False)
+    # model.solver.set_verbose(False)
 
-    # 全てのコミュニティとそれに対応する重みを計算
-    all_communities = []
-    w_c_values = []
-    for partition in partitions:
-        for C in partition:
-            w_c = calc_w_c(C, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative)
-            w_c_values.append(w_c)
-            all_communities.append(C)
+    w_c_dict = calc_w_c_dict(
+        partitions, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative
+    )
 
-    # z 変数を作成 [0,1]閉区間
-    z_vars = [model.add_var(var_type=CONTINUOUS, lb=0, ub=1, name=f"z_{i}") for i in range(len(all_communities))]
+    z_vars = {C: model.add_var(var_type=CONTINUOUS, lb=0, ub=1, name=f"z_{C}") for C in w_c_dict.keys()}
 
-    # 目的関数を定義
-    model.objective = xsum(w_c_values[i] * z_vars[i] for i in range(len(all_communities)))
+    model.objective = xsum(w_c_dict[C] * z_vars[C] for C in w_c_dict.keys())
 
-    # 制約を追加（各頂点がちょうど1つのクラスターに属するようにする）
     num_vertices = adj_matrix_positive.shape[0]
+    constraints = {}
     for u in range(num_vertices):
-        model += xsum(z_vars[i] for i, C in enumerate(all_communities) if u in C) == 1
+        constr = model.add_constr(xsum(z_vars[C] for C in w_c_dict.keys() if u in C) == 1)
+        constraints[u] = constr
 
-    # 最適化を実行
+    return model, z_vars, constraints
+
+def add_column_to_lp_s(model, constraints, w_c, community, z_vars):
+    """
+    LPモデルに新しい列(変数と制約)を追加する関数
+    """
+    column = Column([1 if u in community else 0 for u, _ in enumerate(constraints)], constraints)
+
+    z_new = model.add_var(var_type=CONTINUOUS, lb=0, ub=1, obj=w_c, column=column, name=f"z_{community}")
+
+    z_vars[community] = z_new
+
+    return z_new
+
+
+def solve_lp_s(model, z_vars, constraints):
+    """
+    LP(S) モデルを解き、双対変数と結果を取得する関数
+    """
     model.optimize()
 
-    # 解を取得
-    solution = [z_var.x for z_var in z_vars]
+    solution = {C: z_var.x for C, z_var in z_vars.items()}
     objective_value = model.objective_value
 
-    return objective_value, solution, all_communities
+    dual_variables = {u: constraints[u].pi for u in constraints.keys()}
+    
+    for u, constr in constraints.items():
+        print(f"Constraint {u}: Dual Variable = {constr.pi}")
 
-def solve_ld_s(partitions, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative):
-    """
-    双対問題 LD(S) を解く関数
-    """
-    model = Model(sense=minimize, solver_name="CBC")
-    model.solver.set_verbose(False)
+    return objective_value, solution, dual_variables
 
-    # 全てのコミュニティとその重みを計算
-    all_communities = []
-    w_c_values = []
-    for partition in partitions:
-        for C in partition:
-            w_c = calc_w_c(C, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative)
-            w_c_values.append(w_c)
-            all_communities.append(C)
-
-    # 双対変数 y を作成 defaultの確認memo -infにする
-    num_vertices = adj_matrix_positive.shape[0]
-    y_vars = [model.add_var(lb=-INF, ub=INF, name=f"y_{u}") for u in range(num_vertices)]
-
-    # 目的関数を定義
-    model.objective = xsum(y_vars[u] for u in range(num_vertices))
-
-    # 制約を追加（双対条件を満たすようにする）
-    for i, C in enumerate(all_communities):
-        model += xsum(y_vars[u] for u in C) >= w_c_values[i]
-
-    # 最適化を実行
-    model.optimize()
-
-    # 解を取得
-    solution = [y_var.x for y_var in y_vars]
-    objective_value = model.objective_value
-
-    return objective_value, solution
-
-def solve_ap_qp_milp(vertices, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative, lambda_val, solution_ld):
+def solve_ap_qp_milp(vertices, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative, lambda_val, dual_variables):
     """
     AP-QP の整数線形計画を解く関数
     """
     edges = graph_util.generate_edges(adj_matrix_positive, adj_matrix_negative)
-    
+
     model = Model(sense=maximize, solver_name="CBC")
     model.solver.set_verbose(False)
 
@@ -120,13 +110,14 @@ def solve_ap_qp_milp(vertices, adj_matrix_positive, adj_matrix_negative, degree_
         - 2 * (1 - lambda_val) * xsum(degree_matrix_positive[u, u] * alpha_vars[u] for u in vertices)
         - 4 * xsum(w_vars[u, v] for u, v in edges if adj_matrix_negative[u, v] > 0)
         + 2 * lambda_val * xsum(degree_matrix_negative[u, u] * alpha_vars[u] for u in vertices)
-        - xsum(solution_ld[u] * x_vars[u] for u in vertices)
-    )   
+        - xsum(dual_variables[u] * x_vars[u] for u in vertices)
+    )
 
     # 制約を追加
     for u in vertices:
         model += s_var - (1 - x_vars[u]) <= alpha_vars[u], f"alpha_lower_bound_{u}"
-        model += alpha_vars[u] <= x_vars[u], f"alpha_upper_bound_{u}"
+        model += alpha_vars[u] <= s_var, f"alpha_upper_bound_s{u}"
+        model += alpha_vars[u] <= x_vars[u], f"alpha_upper_bound_x{u}"
 
     model += xsum(alpha_vars[u] for u in vertices) == 1, "alpha_sum_constraint"
 
@@ -143,39 +134,67 @@ def solve_ap_qp_milp(vertices, adj_matrix_positive, adj_matrix_negative, degree_
     solution = {u: x_vars[u].x for u in vertices}
     objective_value = model.objective_value
 
+    print(model.objective)
+    for c in model.constrs:
+        print(c)
+
     return objective_value, solution, s_var.x
+
+def solve_dual_lp(vertices, all_communities, w_c_dict):
+    """
+    双対問題 (Dual Problem) を解く関数
+    """
+    from mip import Model, xsum, minimize, CONTINUOUS
+
+    model = Model(sense=minimize, solver_name="CBC")
+    model.solver.set_verbose(False)
+
+    y_vars = {u: model.add_var(var_type=CONTINUOUS, name=f"y_{u}") for u in vertices}
+
+    model.objective = xsum(y_vars[u] for u in vertices)
+
+    for C in all_communities:
+        model.add_constr(xsum(y_vars[u] for u in C) >= w_c_dict[C], name=f"dual_constr_{C}")
+
+    model.optimize()
+
+    y_solution = {u: y_vars[u].x for u in vertices}
+    objective_value = model.objective_value
+
+    print(model.objective)
+    for c in model.constrs:
+        print(c)
+    print("LP(D) Objective Value:", objective_value)
+    print("LP(D) Solution:", y_solution) 
+
+    return y_solution, objective_value
 
 def column_generation(vertices, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative, lambda_val, initial_partitions):
     """
-    列生成法
+    列生成法を実行する関数
     """
-    # Step 1: 初期の列集合 S を設定する. 
+    # モデルの初期化
+    model, z_vars, constraints = create_lp_s(
+        initial_partitions, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative
+    )
+
     S = initial_partitions
 
     while True:
-        # Step 2: 線形計画問題 LP(S), LD(S) を解く. LD(S)の解き方を相談する. 
-        # 作るのと解くのを分けるmemo
-        objective_value_lp, solution_lp, all_communities = solve_lp_s(
-            partitions=S,
-            adj_matrix_positive=adj_matrix_positive,
-            adj_matrix_negative=adj_matrix_negative,
-            degree_matrix_positive=degree_matrix_positive,
-            degree_matrix_negative=degree_matrix_negative,
-            lambda_val=lambda_val
-        )
+        # LP(S)を解く
+        objective_value_lp, solution_lp, dual_variables = solve_lp_s(model, z_vars, constraints)
+        print(model.objective)
+        for c in model.constrs:
+            print(c)
         print("LP(S) Objective Value:", objective_value_lp)
-    
-        objective_value_ld, solution_ld = solve_ld_s(
-            partitions=S,
-            adj_matrix_positive=adj_matrix_positive,
-            adj_matrix_negative=adj_matrix_negative,
-            degree_matrix_positive=degree_matrix_positive,
-            degree_matrix_negative=degree_matrix_negative,
-            lambda_val=lambda_val
-        )
-        print("LD(S) Objective Value:", objective_value_ld)
+        print("LP(S) Solution:", solution_lp)
+        print("LP(S) Dual Variables:", dual_variables)
 
-        # Step 3: 補助問題 AP-QP を解く. 
+        # 双対問題を解いて検証
+        w_c_dict = calc_w_c_dict(S, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative)
+        solve_dual_lp(vertices, list(w_c_dict.keys()), w_c_dict)
+
+        # AP-QPを解く
         objective_value_ap_qp, solution_ap_qp, _ = solve_ap_qp_milp(
             vertices=vertices,
             adj_matrix_positive=adj_matrix_positive,
@@ -183,18 +202,21 @@ def column_generation(vertices, adj_matrix_positive, adj_matrix_negative, degree
             degree_matrix_positive=degree_matrix_positive,
             degree_matrix_negative=degree_matrix_negative,
             lambda_val=lambda_val,
-            solution_ld=solution_ld
+            dual_variables = dual_variables
         )
         print("AP-QP Objective Value:", objective_value_ap_qp)
 
-        # Step 4: 終了条件を確認する. 
+        # x_uを目的関数に代入してみて正負を確認
+        # 終了条件を確認
         if objective_value_ap_qp <= 0:
             print("Column Generation terminated: no column with positive reduced cost.")
             break
 
-        # Step 5: S を更新する. 
-        new_column = [u for u in vertices if solution_ap_qp[u] > 0.5]
-        print(f"New column added to S: {new_column}")
-        S.append([new_column])  # 新しいパーティションを追加する. 
+        # 新しい列を追加
+        new_community = tuple(u for u in vertices if solution_ap_qp[u] > 0.9)
+        w_c = calc_w_c(new_community, lambda_val, adj_matrix_positive, adj_matrix_negative, degree_matrix_positive, degree_matrix_negative)
+        z_new = add_column_to_lp_s(model, constraints, w_c, new_community, z_vars)
 
-    return S, objective_value_lp, solution_lp, all_communities
+        S.append([new_community])
+
+    return S, objective_value_lp, solution_lp, list(z_vars.keys())
