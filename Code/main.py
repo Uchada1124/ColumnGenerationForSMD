@@ -1,63 +1,50 @@
-import utils.graph_util as graph_util
-import utils.partition_util as partition_util
-import utils.column_generation_util as cg_util
+import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
+
+from utils.input_data import read_csv_as_numpy
+from utils.graph import generate_signed_graph
+from utils.wc import calc_w_C
+from utils.column_generation import column_generation
 
 def main():
-    # グラフ生成のパラメータを設定する. 
-    block_sizes = [5, 7, 8]
-    p_in = 0.8
-    p_out = 0.1
-    
-    # 符号付ネットワークを生成する. 
-    (nodes, adj_matrix_positive, adj_matrix_negative,
-     degree_matrix_positive, degree_matrix_negative, graph) = graph_util.generate_signed_graph(block_sizes, p_in, p_out)
-    
-    print("Positive Adjacency Matrix (A+):\n", adj_matrix_positive)
-    print("Negative Adjacency Matrix (A-):\n", adj_matrix_negative)
-    print("Positive Degree Matrix (D+):\n", degree_matrix_positive)
-    print("Negative Degree Matrix (D-):\n", degree_matrix_negative)
-    
-    graph_util.plot_signed_graph(graph)
+    # 隣接行列のデータを読込む
+    Adj = read_csv_as_numpy("./data/01_Slovene_AdjMat.csv")
 
-    # 初期の分割集合を生成する. 
-    num_nodes = sum(block_sizes)
-    vertices = list(range(num_nodes))
-    initial_partitions = [partition_util.generate_singleton(vertices)]
+    # 隣接行列をもとにグラフを生成
+    G, vertices, A_plus, A_minus, D_plus, D_minus = generate_signed_graph(A=Adj)
 
-    # initial_partitions = [
-    # [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11], [12, 13, 14], [15, 16, 17], [18, 19]],
-    # partition_util.generate_singleton(vertices)
-    # ]
+    # # データの確認
+    # print("頂点数:", len(vertices))
+    # print("正のエッジ数:", np.sum(A_plus) // 2)
+    # print("負のエッジ数:", np.sum(A_minus) // 2)
+    # print("D+ (正の次数):", D_plus)
+    # print("D- (負の次数):", D_minus)
 
-    # ハイパーパラメータを設定する. 
-    lambda_val = 1.0
+    # # グラフの可視化
+    # pos = nx.spring_layout(G)  # ノード配置
+    # edge_colors = ["red" if G[u][v]["sign"] == -1 else "blue" for u, v in G.edges()]
+    # plt.figure(figsize=(8, 6))
+    # nx.draw(G, pos, with_labels=True, edge_color=edge_colors, node_color="lightgray", node_size=500)
+    # plt.title("符号付きネットワークの可視化")
+    # plt.show()
 
-    # 列生成法を実行する. 
-    final_partitions, final_objective_value, final_solution, all_communities = cg_util.column_generation(
-        vertices=vertices,
-        adj_matrix_positive=adj_matrix_positive,
-        adj_matrix_negative=adj_matrix_negative,
-        degree_matrix_positive=degree_matrix_positive,
-        degree_matrix_negative=degree_matrix_negative,
-        lambda_val=lambda_val,
-        initial_partitions=initial_partitions
+    # # w_Cの確認
+    # print(A_plus)
+    # print(A_minus)
+    # lambda_val = 0.5
+    # C = [0, 1, 2]
+    # w_C = calc_w_C(
+    #     C, A_plus, A_minus, D_plus, D_minus, lambda_val
+    # )
+    # print(w_C)
+
+    lambda_val = 0.5
+    init_partitions = [[[u] for u in vertices]]
+    # print(init_partitions)
+    column_generation(
+        vertices, A_plus, A_minus, D_plus, D_minus, lambda_val, init_partitions
     )
-
-    # # 結果を出力する. 
-    # print("Final Partitions:", final_partitions)
-    # print("Final Objective Value:", final_objective_value)
-    # print("Final Solution:", final_solution)
-    # print("All Communities:", all_communities)
-
-    # # 解から結果のパーティションを生成
-    # result_partition = []
-    # for community, z_value in final_solution.items():
-    #     if z_value > 0.9:
-    #         print(f"z (for community {community}): {z_value}")
-    #         result_partition.append(community)
-
-    # # プロット
-    # graph_util.plot_partitioned_graph(graph, result_partition)
 
 if __name__ == '__main__':
     main()
