@@ -5,7 +5,7 @@ class AP_MILP:
         """
         AP-MILPの初期化
         """
-        self.model = Model(sense=MAXIMIZE, solver_name="CBC")
+        self.model = Model(solver_name="CBC")
         self.model.solver.set_verbose(False)
         self.vertices = vertices
         self.A_plus = A_plus

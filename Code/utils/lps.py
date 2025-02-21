@@ -1,4 +1,4 @@
-from mip import Model, xsum, maximize, MAXIMIZE, CONTINUOUS, Column, OptimizationStatus
+from mip import Model, xsum, maximize, CONTINUOUS, Column, OptimizationStatus
 
 class LPS:
     def __init__(self, S, w_C_dict, vertices):
@@ -10,7 +10,7 @@ class LPS:
         - w_C_dict: 各列の重みを格納する辞書 {frozenset(C): w_C}
         - vertices: 頂点のリスト
         """
-        self.model = Model(sense=MAXIMIZE, solver_name="CBC")
+        self.model = Model(solver_name="CBC")
         self.model.solver.set_verbose(False)
         self.S = list(S)
         self.w_C_dict = w_C_dict
@@ -78,7 +78,7 @@ class LPS:
             )
             self.z_C[C] = z_new
 
-    def print_lps(self):    
+    def debag_print_lps(self):    
         print("\n=== LPS ===")
 
         print("S")
