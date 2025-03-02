@@ -1,22 +1,36 @@
 import numpy as np
 
+from utils.input_data import read_csv_as_numpy
+from utils.graph import generate_signed_graph
+from utils.partition import generate_singleton
 from utils.wc import calc_w_C
 
 def test_calc_w_C():
-    A_plus = np.array([
-        [0, 1, 1],
-        [1, 0, 0],
-        [1, 0, 0]
-    ])
-    A_minus = np.array([
-        [0, 1, 0],
-        [1, 0, 1],
-        [0, 1, 0]
-    ])
-    D_plus = np.sum(A_plus, axis=1)
-    D_minus = np.abs(np.sum(A_minus, axis=1))
-    C = [0, 1, 2]
-    lambda_val = 0.5
+    Adj = read_csv_as_numpy("./data/test_data/01_Slovene_AdjMat.csv")
 
-    result = calc_w_C(C, A_plus, A_minus, D_plus, D_minus, lambda_val)
-    assert result == 0
+    G, vertices, A_plus, A_minus, D_plus, D_minus = generate_signed_graph(A=Adj)
+
+    lambda_val = 0.5
+    init_partitions = [generate_singleton(vertices)]
+
+    results = {}
+    for partition in init_partitions:
+        for C in partition:
+            frozen_C = frozenset(C)
+            if frozen_C not in results:
+                results[frozen_C] = calc_w_C(C, A_plus, A_minus, D_plus, D_minus, lambda_val)
+
+    expected = {
+        frozenset({0}): 1.0,
+        frozenset({1}): 1.0,
+        frozenset({2}): 1.0,
+        frozenset({3}): 1.0,
+        frozenset({4}): 3.0,
+        frozenset({5}): 1.0,
+        frozenset({6}): 3.0,
+        frozenset({7}): 1.0,
+        frozenset({8}): 1.0,
+        frozenset({9}): 5.0
+    }
+
+    assert results == expected

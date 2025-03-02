@@ -1,6 +1,7 @@
 from utils.wc import calc_w_C
 from utils.lps import LPS
-from utils.ap_milp import AP_MILP
+from utils.ap_milp_1 import AP_MILP
+# from utils.ap_milp_2 import AP_MILP
 
 def column_generation(vertices, A_plus, A_minus, D_plus, D_minus, lambda_val, init_partitions): 
     '''
@@ -66,6 +67,8 @@ def column_generation(vertices, A_plus, A_minus, D_plus, D_minus, lambda_val, in
             )
         new_S = list(new_w_C_dict.keys())
         S += new_S
+
+        lps.debag_print_lps()
 
         # LPSを更新
         lps.update_lps(new_S, new_w_C_dict)
