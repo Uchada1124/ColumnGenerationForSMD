@@ -6,7 +6,8 @@ from utils.column_generation import column_generation
 
 def main():
     # 隣接行列のデータを読込む
-    Adj = read_csv_as_numpy("./data/test_data/01_Slovene_AdjMat.csv")
+    # Adj = read_csv_as_numpy("./data/test_data/01_Slovene_AdjMat.csv")
+    Adj = read_csv_as_numpy("./data/test_data/02_GahukuGama_AdjMat.csv")
 
     # 隣接行列をもとにグラフを生成
     G, vertices, A_plus, A_minus, D_plus, D_minus = generate_signed_graph(A=Adj)
