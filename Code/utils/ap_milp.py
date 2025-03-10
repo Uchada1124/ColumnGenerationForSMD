@@ -64,7 +64,7 @@ class AP_MILP:
         # 目的関数を設定
         self.model.objective = maximize(self.base_term + dual_term)
 
-    def solve_ap_milp(self):
+    def solve_model(self):
         """
         AP-MILPを解く
         Returns:
@@ -83,7 +83,7 @@ class AP_MILP:
 
         return self.ap_milp_opt, self.ap_milp_sol
 
-    def debag_print_ap_milp(self):
+    def debag_print_model(self):
         print("\n=== AP-MILP ===")
 
         print("Objective Function:")

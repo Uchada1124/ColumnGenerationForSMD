@@ -42,12 +42,12 @@ def column_generation(vertices, A_plus, A_minus, D_plus, D_minus, lambda_val, in
 
     while(True):
         # LP(S)を解く, 最適値, 主問題の解, 双対問題の解を得る. 
-        lps_opt, lps_primal_sol, lps_dual_sol = lps.solve_lps()
+        lps_opt, lps_primal_sol, lps_dual_sol = lps.solve_model()
         lps_opt_list.append(lps_opt)
 
         # AP-MILPを解く ap_milp_opt, ap_milp_sol
         ap_milp.add_lps_dual_sol(lps_dual_sol)
-        ap_milp_opt, ap_milp_sol = ap_milp.solve_ap_milp()
+        ap_milp_opt, ap_milp_sol = ap_milp.solve_model()
 
         # 終了条件 ap_milp_opt <= 0 なら stop
         if (ap_milp_opt <= 0):
@@ -68,7 +68,7 @@ def column_generation(vertices, A_plus, A_minus, D_plus, D_minus, lambda_val, in
         S += new_S
 
         # LPSを更新
-        lps.update_lps(new_S, new_w_C_dict)
+        lps.update_model(new_S, new_w_C_dict)
 
         # カウントの更新
         cnt+=1

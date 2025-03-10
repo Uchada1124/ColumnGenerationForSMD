@@ -29,7 +29,7 @@ class LPS:
         # 目的関数
         self.model.objective = maximize(xsum(self.w_C_dict[C] * self.z_C[C] for C in self.S))
 
-    def solve_lps(self):
+    def solve_model(self):
         """
         LP(S) を解く
         Returns:
@@ -50,7 +50,7 @@ class LPS:
 
         return self.lps_opt, self.lps_primal_sol, self.lps_dual_sol
 
-    def update_lps(self, new_S, new_w_C_dict):
+    def update_model(self, new_S, new_w_C_dict):
         """
         新しい列を追加してモデルを更新
         Parameters:
@@ -78,7 +78,7 @@ class LPS:
             )
             self.z_C[C] = z_new
 
-    def debag_print_lps(self):    
+    def debag_print_model(self):    
         print("\n=== LPS ===")
 
         print("S")
