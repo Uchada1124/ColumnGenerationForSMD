@@ -36,8 +36,8 @@ class LPSWithPartition(LPS):
         # 一時的に分割数制約を削除
         self.model.remove(self.partition_constr)
         
-        # 親クラスのupdate_lpsを呼び出し
-        super().update_lps(new_S, new_w_C_dict)
+        # 親クラスのupdate_modelを呼び出し
+        super().update_model(new_S, new_w_C_dict)
         
         # 分割数制約を再追加
         self.add_partition_constr(current_k)
