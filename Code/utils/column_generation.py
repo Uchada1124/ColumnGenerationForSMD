@@ -23,15 +23,16 @@ def column_generation(vertices, A_plus, A_minus, D_plus, D_minus, lambda_val, in
     - cnt: 反復回数
     '''
     # 初期化
-    w_C_dict = {}
-    for partition in init_partitions:
-        for C in partition:
-            frozen_C = frozenset(C)
-            if frozen_C not in w_C_dict:
-                w_C_dict[frozen_C] = calc_w_C(C, A_plus, A_minus, D_plus, D_minus, lambda_val)
-    S = list(w_C_dict.keys())
 
-    lps = LPS(S, w_C_dict, vertices)
+    lps = LPS(
+        vertices=vertices, 
+        A_plus=A_plus, 
+        A_minus=A_minus, 
+        D_plus=D_plus, 
+        D_minus=D_minus, 
+        lambda_val=lambda_val, 
+        init_partitions=init_partitions
+        )
 
     ap_milp = AP_MILP(vertices, A_plus, A_minus, D_plus, D_minus, lambda_val)
 
@@ -39,6 +40,7 @@ def column_generation(vertices, A_plus, A_minus, D_plus, D_minus, lambda_val, in
     lps_opt_list = []
     cg_opt = 0
     cg_sol = {}
+    S = []
 
     while(True):
         # LP(S)を解く, 最適値, 主問題の解, 双対問題の解を得る. 
@@ -58,17 +60,10 @@ def column_generation(vertices, A_plus, A_minus, D_plus, D_minus, lambda_val, in
             break
 
         # ap_milp_solよりS, w_C_dictの更新
-        new_w_C_dict = {}
         frozen_C = frozenset(u for u, x_val in ap_milp_sol["x_u"].items() if x_val == 1.0)
-        if frozen_C not in w_C_dict:
-            new_w_C_dict[frozen_C] = calc_w_C(
-                list(frozen_C), A_plus, A_minus, D_plus, D_minus, lambda_val
-            )
-        new_S = list(new_w_C_dict.keys())
-        S += new_S
 
         # LPSを更新
-        lps.update_model(new_S, new_w_C_dict)
+        S = lps.update_model(frozen_C)
 
         # カウントの更新
         cnt+=1

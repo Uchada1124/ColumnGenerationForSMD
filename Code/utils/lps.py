@@ -1,7 +1,8 @@
 from mip import Model, xsum, maximize, CONTINUOUS, Column, OptimizationStatus
+from utils.wc import calc_w_C
 
 class LPS:
-    def __init__(self, S, w_C_dict, vertices):
+    def __init__(self, vertices, A_plus, A_minus, D_plus, D_minus, lambda_val, init_partitions):
         """
         LP(S)の初期化
 
@@ -10,11 +11,24 @@ class LPS:
         - w_C_dict: 各列の重みを格納する辞書 {frozenset(C): w_C}
         - vertices: 頂点のリスト
         """
+        self.vertices = vertices
+        self.A_plus = A_plus
+        self.A_minus = A_minus
+        self.D_plus = D_plus
+        self.D_minus = D_minus
+        self.lambda_val = lambda_val
+        self.init_partitions = init_partitions
+
         self.model = Model(solver_name="CBC")
         self.model.solver.set_verbose(False)
-        self.S = list(S)
-        self.w_C_dict = w_C_dict
         self.vertices = vertices
+        self.w_C_dict = {}
+        for partition in init_partitions:
+            for C in partition:
+                frozen_C = frozenset(C)
+                if frozen_C not in self.w_C_dict:
+                    self.w_C_dict[frozen_C] = calc_w_C(C, A_plus, A_minus, D_plus, D_minus, lambda_val)
+        self.S = list(self.w_C_dict.keys())
 
         # 変数
         self.z_C = {C: self.model.add_var(var_type=CONTINUOUS, lb=0, name=f"z_{C}") for C in self.S}
@@ -50,15 +64,23 @@ class LPS:
 
         return self.lps_opt, self.lps_primal_sol, self.lps_dual_sol
 
-    def update_model(self, new_S, new_w_C_dict):
+    def update_model(self, frozen_C):
         """
         新しい列を追加してモデルを更新
         Parameters:
         - new_S: 新しい列集合 (frozenset のリスト)
         - new_w_C_dict: 新しい列に対応する重み辞書
         """
+        new_w_C_dict = {}
+        if frozen_C not in self.w_C_dict:
+            new_w_C_dict[frozen_C] = calc_w_C(
+                list(frozen_C), self.A_plus, self.A_minus, self.D_plus, self.D_minus, self.lambda_val
+            )
+        new_S = list(new_w_C_dict.keys())
+
         # S, w_C_dictの更新
         self.w_C_dict.update(new_w_C_dict)
+        # self.S += new_S
         self.S = list(self.w_C_dict.keys())
 
         for C in new_S:
@@ -78,6 +100,8 @@ class LPS:
             )
             self.z_C[C] = z_new
 
+        return self.S
+    
     def debag_print_model(self):    
         print("\n=== LPS ===")
 

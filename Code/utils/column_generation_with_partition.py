@@ -21,7 +21,7 @@ def column_generation_with_partition(
     # k=2 についてtest
     print("k=2")
     k1 = 2
-    
+
     init_partitions = [generate_partition(vertices, k1)]
     w_C_dict = {}
     for partition in init_partitions:
@@ -30,6 +30,11 @@ def column_generation_with_partition(
             if frozen_C not in w_C_dict:
                 w_C_dict[frozen_C] = calc_w_C(C, A_plus, A_minus, D_plus, D_minus, lambda_val)
     S = list(w_C_dict.keys())
+
+    #　デバックプリント
+    print("S:", S)
+    print("w_C_dict:", w_C_dict)
+    print("init_partitions:", init_partitions)
 
     lps = LPSWithPartition(S, w_C_dict, vertices)
     lps.add_partition_constr(k1)
@@ -48,6 +53,11 @@ def column_generation_with_partition(
             if frozen_C not in w_C_dict:
                 w_C_dict[frozen_C] = calc_w_C(C, A_plus, A_minus, D_plus, D_minus, lambda_val)
     S = list(w_C_dict.keys())
+
+    #　デバックプリント
+    print("S:", S)
+    print("w_C_dict:", w_C_dict)
+    print("init_partitions:", init_partitions)
 
     lps.add_partition_constr(k2)
     lps.solve_model()
