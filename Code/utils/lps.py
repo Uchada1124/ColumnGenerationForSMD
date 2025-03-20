@@ -1,4 +1,5 @@
 from mip import Model, xsum, maximize, CONTINUOUS, Column, OptimizationStatus
+
 from utils.wc import calc_w_C
 
 class LPS:
@@ -23,12 +24,8 @@ class LPS:
         self.model.solver.set_verbose(False)
         self.vertices = vertices
         self.w_C_dict = {}
-        for partition in init_partitions:
-            for C in partition:
-                frozen_C = frozenset(C)
-                if frozen_C not in self.w_C_dict:
-                    self.w_C_dict[frozen_C] = calc_w_C(C, A_plus, A_minus, D_plus, D_minus, lambda_val)
-        self.S = list(self.w_C_dict.keys())
+        self.S = []
+        self.init_S_w_C_dict()
 
         # 変数
         self.z_C = {C: self.model.add_var(var_type=CONTINUOUS, lb=0, name=f"z_{C}") for C in self.S}
@@ -42,6 +39,19 @@ class LPS:
 
         # 目的関数
         self.model.objective = maximize(xsum(self.w_C_dict[C] * self.z_C[C] for C in self.S))
+
+    def init_S_w_C_dict(self):
+        """
+        self.S と self.w_C_dict を初期化
+        """
+        for partition in self.init_partitions:
+            for C in partition:
+                frozen_C = frozenset(C)
+                if frozen_C not in self.w_C_dict:
+                    self.w_C_dict[frozen_C] = calc_w_C(
+                        C, self.A_plus, self.A_minus, self.D_plus, self.D_minus, self.lambda_val
+                        )
+        self.S = list(self.w_C_dict.keys())
 
     def solve_model(self):
         """

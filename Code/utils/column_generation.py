@@ -1,4 +1,3 @@
-from utils.wc import calc_w_C
 from utils.lps import LPS
 from utils.ap_milp import AP_MILP
 

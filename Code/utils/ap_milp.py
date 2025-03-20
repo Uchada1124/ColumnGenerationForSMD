@@ -89,6 +89,10 @@ class AP_MILP:
         print("Objective Function:")
         print(self.model.objective)
 
+        print("\nConstraint:")
+        for constr in self.model.constrs:
+            print(constr)
+
         print("\nStatus:")
         print(self.model.status)
 

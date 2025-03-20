@@ -1,7 +1,7 @@
 from utils.input_data import read_csv_as_numpy
 from utils.graph import generate_signed_graph
 from utils.plot import plot_graph, plot_lps_objective, plot_partitioned_graph
-from utils.partition import generate_singleton, generate_partition
+from utils.partition import generate_singleton
 from utils.column_generation_with_partition import column_generation_with_partition
 
 def main():
@@ -25,7 +25,7 @@ def main():
     # 列生成法（分割数制約付き）の実行
     results = column_generation_with_partition(
         vertices, A_plus, A_minus, D_plus, D_minus, 
-        lambda_val,
+        lambda_val, init_partitions=[generate_singleton(vertices)]
     )
 
     # # 結果の出力と可視化
