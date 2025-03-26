@@ -1,4 +1,4 @@
-from mip import Model, xsum, maximize, CONTINUOUS, BINARY, OptimizationStatus
+from mip import Model, xsum, maximize, BINARY, OptimizationStatus
 
 class AP_MILPWithPartition:
     def __init__(self, vertices, A_plus, A_minus, D_plus, D_minus, lambda_val):
@@ -24,17 +24,32 @@ class AP_MILPWithPartition:
                     self.E_minus.append((i, j))
         self.E = self.E_plus + self.E_minus
 
+        # # 変数
+        # self.x_u = {u: self.model.add_var(var_type=BINARY, name=f"x_{u}") for u in self.vertices}
+        # self.z_uv = {(u, v): self.model.add_var(var_type=BINARY, name=f"z_{u}_{v}") for (u, v) in  self.E}
+        # self.k = 1
+
+        # # 制約
+        # for (u, v) in self.E:
+        #     self.model.add_constr(self.x_u[u] + self.x_u[v] <= 1 + self.z_uv[(u, v)])
+        #     self.model.add_constr(self.x_u[u] >= self.z_uv[(u, v)])
+        #     self.model.add_constr(self.x_u[v] >= self.z_uv[(u, v)])
+        # self.partition_constr = self.model.add_constr(
+        #     xsum(self.x_u[u] for u in self.vertices) == self.k,
+        #     name="partition_constr"
+        # )
+
         # 変数
         self.x_u = {u: self.model.add_var(var_type=BINARY, name=f"x_{u}") for u in self.vertices}
-        self.z_uv = {(u, v): self.model.add_var(var_type=BINARY, name=f"z_{u}_{v}") for (u, v) in  self.E}
+        self.z_uv = {(u, v): self.model.add_var(var_type=BINARY, name=f"z_{u}_{v}") for u in self.vertices for v in self.vertices}
         self.k = 1
-        self.inv_k = 1 / self.k
 
         # 制約
-        for (u, v) in self.E:
-            self.model.add_constr(self.x_u[u] + self.x_u[v] <= 1 + self.z_uv[(u, v)])
-            self.model.add_constr(self.x_u[u] >= self.z_uv[(u, v)])
-            self.model.add_constr(self.x_u[v] >= self.z_uv[(u, v)])
+        for u in self.vertices:
+            for v in self.vertices:
+                self.model.add_constr(self.x_u[u] + self.x_u[v] <= 1 + self.z_uv[(u, v)])
+                self.model.add_constr(self.x_u[u] >= self.z_uv[(u, v)])
+                self.model.add_constr(self.x_u[v] >= self.z_uv[(u, v)])
         self.partition_constr = self.model.add_constr(
             xsum(self.x_u[u] for u in self.vertices) == self.k,
             name="partition_constr"
@@ -42,14 +57,11 @@ class AP_MILPWithPartition:
 
         # ベース項（双対変数なし）
         self.base_term = (
-            4 * self.inv_k * xsum(self.z_uv[(u, v)] for (u, v) in  self.E_plus)
-            -2 * self.inv_k * (1 - self.lambda_val) * xsum(self.D_plus[u] * self.x_u[u] for u in self.vertices)
-            -4 * self.inv_k * xsum(self.z_uv[(u, v)] for u in self.vertices for (u, v) in self.E_minus)
-            +2 * self.inv_k * self.lambda_val * xsum(self.D_minus[u] * self.x_u[u] for u in self.vertices)
+            4 * xsum(self.z_uv[(u, v)] for (u, v) in  self.E_plus)
+            -2 * (1 - self.lambda_val) * xsum(self.D_plus[u] * self.x_u[u] for u in self.vertices)
+            -4 * xsum(self.z_uv[(u, v)] for u in self.vertices for (u, v) in self.E_minus)
+            +2 * self.lambda_val * xsum(self.D_minus[u] * self.x_u[u] for u in self.vertices)
         )
-
-        self.dual_term = 0
-        self.lps_dual_sol = None
 
     def add_lps_dual_sol(self, lps_dual_sol):
         """
@@ -57,7 +69,10 @@ class AP_MILPWithPartition:
         """
         self.lps_dual_sol = lps_dual_sol
         # 双対項
-        self.dual_term = - self.inv_k * xsum(lps_dual_sol[v] * self.z_uv[(u, v)] for (u, v) in self.E)
+        self.dual_term = - xsum(lps_dual_sol[v] * self.z_uv[(u, v)] for u in self.vertices for v in self.vertices)
+
+        print(lps_dual_sol)
+        print(self.dual_term)
 
         # 目的関数を設定
         self.model.objective = maximize(self.base_term + self.dual_term)
@@ -99,44 +114,18 @@ class AP_MILPWithPartition:
             for u, value in self.ap_milp_sol["x_u"].items():
                 print(f"  x_{u}: {value}")
 
-    def update_model_for_k(self, k):
+    def write_model(self, filename = "ap_milp_with_partition.lp"):
         """
-        モデルの更新
-        Parameters:
-        - k: 制約として設定する集合の要素数, 0以上かつ頂点数未満である必要がある
+        モデルをファイルに書き出す
+        """
+        self.model.write(filename)
+
+    def update_partition_constr(self, k):
+        """
+        x_u 列生成の際に生成される集合の要素数を固定する制約を更新
         """
         self.k = k
-        self.inv_k = 1 / self.k
 
-        self.update_partition_constr()
-        self.update_base_term()
-        if self.lps_dual_sol is not None:
-            self.add_lps_dual_sol(self.lps_dual_sol)
-
-    def update_partition_constr(self):
-        """
-        x_u 列生成の際に生成される集合の要素数を固定する制約を追加または更新
-        """
-        # 既存の制約を削除
+        # 分割制約の更新
         if hasattr(self, "partition_constr"):
-            try:
-                self.model.remove(self.partition_constr)
-            except Exception as e:
-                print(f"Warning: Failed to remove partition constraint. Error: {e}")
-
-        # 新しい制約を追加
-        self.partition_constr = self.model.add_constr(
-            xsum(self.x_u[u] for u in self.vertices) == self.k,
-            name="partition_constr"
-        )
-
-    def update_base_term(self):
-        """
-        k の変更に応じてベース項（目的関数の一部）を更新
-        """
-        self.base_term = (
-            4 * self.inv_k * xsum(self.z_uv[(u, v)] for (u, v) in self.E_plus)
-            -2 * self.inv_k * (1 - self.lambda_val) * xsum(self.D_plus[u] * self.x_u[u] for u in self.vertices)
-            -4 * self.inv_k * xsum(self.z_uv[(u, v)] for u in self.vertices for (u, v) in self.E_minus)
-            +2 * self.inv_k * self.lambda_val * xsum(self.D_minus[u] * self.x_u[u] for u in self.vertices)
-        )
+            self.partition_constr.rhs = self.k

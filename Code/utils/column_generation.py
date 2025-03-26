@@ -51,14 +51,14 @@ def column_generation(vertices, A_plus, A_minus, D_plus, D_minus, lambda_val, in
         ap_milp_opt, ap_milp_sol = ap_milp.solve_model()
 
         # 終了条件 ap_milp_opt <= 0 なら stop
-        if (ap_milp_opt <= 0):
+        if (ap_milp_opt <= 10e-6):
             # 最終結果の保存
             cg_opt = lps_opt
             cg_sol = lps_primal_sol
 
             break
 
-        # ap_milp_solよりS, w_C_dictの更新
+        # ap_milp_sol より S の更新
         frozen_C = frozenset(u for u, x_val in ap_milp_sol["x_u"].items() if x_val == 1.0)
 
         # LPSを更新
